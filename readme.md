@@ -5,27 +5,52 @@
 
 This project provides an MCP server acting as an interface to the Meta Ads, enabling programmatic access to Meta Ads data and management features.
 
+## 🚀 Quick Start (3 Steps!)
+
+```bash
+# 1. Install dependencies
+pip install -r requirements.txt
+
+# 2. Configure .env (add your Facebook App ID and Secret)
+cp .env.example .env
+# Edit .env with your credentials
+
+# 3. Generate token (no redirect URI needed!)
+python generate_token.py
+# Follow the prompts to get your token from Graph API Explorer
+
+# Done! Start the server
+python server.py
+```
+
 <video controls width="1920" height="512" src="https://github.com/user-attachments/assets/c4a76dcf-cf5d-4a1d-b976-08165e880fe4">Your browser does not support the video tag.</video>
 
-## Self-Hosted OAuth Setup
+## Easy Token Setup (No Redirect URI Needed!)
 
-This server includes a **self-hosted OAuth solution** - no third-party services required!
+This server includes a **simple token generator** - no OAuth redirect configuration required!
 
-### What It Does
+### Method 1: Graph API Explorer (Recommended - Easiest!)
 
-- Runs a local OAuth server on your machine
-- Handles the complete Facebook authentication flow
-- Generates long-lived access tokens (60 days validity)
-- Automatically saves tokens to your `.env` file
-- **100% self-hosted** - your credentials never leave your machine
+**No redirect URI needed! Works immediately!**
 
-### Quick Start
+1. Configure your `.env` file with App ID and Secret
+2. Get a token from [Graph API Explorer](https://developers.facebook.com/tools/explorer/)
+3. Run: `python generate_token.py`
+4. Paste your token when prompted
+5. Token is automatically converted to long-lived (60 days) and saved!
 
-1. Configure your Facebook App credentials in `.env`
+**This is the easiest method and doesn't require any Facebook App configuration beyond creating the app.**
+
+### Method 2: OAuth Server (Advanced - Requires Redirect URI Setup)
+
+If you want to set up full OAuth flow (requires configuring redirect URI in Facebook App):
+
+1. Add `http://localhost:8000/callback` to your Facebook App's redirect URIs
 2. Run: `python oauth_server.py`
 3. Open `http://localhost:8000` in your browser
 4. Authenticate with Facebook
-5. Token is automatically saved and ready to use!
+
+**Note:** OAuth method currently only works with basic permissions due to Facebook's App Review requirements for Ads API permissions.
 
 ---
 
@@ -55,22 +80,36 @@ This server includes a **self-hosted OAuth solution** - no third-party services 
 
 3.  **Configure Facebook App:**
     - Go to [Facebook Developers](https://developers.facebook.com/apps)
-    - Create a new app or use an existing one
+    - Create a new app or use an existing one (choose **"Business"** type if creating new)
+    - **IMPORTANT:** Add **"Marketing API"** product to your app:
+      - Click "Add Product" in left sidebar
+      - Find "Marketing API" and click "Set Up"
     - Copy your App ID and App Secret
     - Create a `.env` file (see `.env.example`):
     ```bash
     FB_APP_ID="your_app_id_here"
     FB_APP_SECRET="your_app_secret_here"
     ```
-    - In your Facebook App settings, add OAuth redirect URI: `http://localhost:8000/callback`
 
-4.  **Generate Access Token (Self-Hosted Method):**
+    **Trouble seeing ads permissions?** See [SETUP_GUIDE.md](SETUP_GUIDE.md) for detailed instructions on enabling Marketing API.
+
+4.  **Generate Access Token (Recommended Method - No Redirect URI Needed):**
+
+    **Using Token Generator Script:**
     ```bash
-    python oauth_server.py
+    python generate_token.py
     ```
-    Then open `http://localhost:8000` in your browser and authenticate. The token will be automatically saved to your `.env` file!
 
-    **Alternative:** You can manually generate a token through the [Meta Graph API Explorer](https://developers.facebook.com/tools/explorer/) with permissions: `ads_read`, `ads_management`, `business_management`, `read_insights`.
+    This will guide you through:
+    1. Opening Graph API Explorer
+    2. Selecting permissions: `ads_read`, `ads_management`, `business_management`
+    3. Converting short-lived token to long-lived (60 days)
+    4. Auto-saving to `.env` file
+
+    **✓ No redirect URI configuration needed!**
+    **✓ Works with Ads API permissions immediately!**
+
+    **Alternative (Advanced):** Use `oauth_server.py` for full OAuth flow (requires redirect URI setup and currently limited to basic permissions without App Review).
 
 ### Usage with MCP Clients (e.g., Cursor, Claude Desktop)
 
@@ -116,22 +155,31 @@ export FB_ACCESS_TOKEN="your_token_here"  # Linux/Mac
 python server.py
 ```
 
-### OAuth Server
+### Token Generator (Recommended)
 
-The included `oauth_server.py` provides a self-hosted OAuth solution:
+The included `generate_token.py` provides the easiest way to get a long-lived token:
+
+```bash
+python generate_token.py
+```
+
+This will:
+1. Prompt you to get a token from Graph API Explorer
+2. Exchange it for a long-lived token (60 days)
+3. Validate the token and show permissions
+4. Automatically save it to your `.env` file
+
+**No redirect URI setup needed!** - Works immediately with Ads API permissions.
+
+### OAuth Server (Advanced)
+
+For those who want full OAuth flow, `oauth_server.py` is available:
 
 ```bash
 python oauth_server.py
 ```
 
-This will:
-1. Start a local server on port 8000
-2. Open `http://localhost:8000` in your browser
-3. Redirect you to Facebook for authentication
-4. Generate a long-lived token (60 days)
-5. Automatically save it to your `.env` file
-
-**No third-party services needed** - everything runs locally on your machine!
+**Note:** Requires redirect URI setup in Facebook App and currently limited to basic permissions without Facebook App Review approval for Ads API access.
 
 ### Available MCP Tools
 

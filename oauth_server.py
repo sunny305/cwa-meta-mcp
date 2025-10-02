@@ -23,18 +23,19 @@ REDIRECT_URI = 'http://localhost:8000/callback'
 API_VERSION = 'v23.0'  # Latest stable version
 
 # Permissions needed for Meta Ads API
-# Note: These require App Review for production, but work in Development Mode
-# if you're added as an Admin/Developer/Tester in the app
+# Note: Facebook changed how Ads API permissions work - they're not OAuth scopes anymore
+# For development/testing, use Graph API Explorer instead (see README)
+# This OAuth server can still be used for basic token generation
 PERMISSIONS = [
-    'ads_read',
-    'ads_management',
-    'business_management',
-    'read_insights'
+    'public_profile',
+    'email'
 ]
 
-# For testing without app review, you can temporarily use basic permissions:
-# PERMISSIONS = ['public_profile', 'email']
-# Then manually generate a token via Graph API Explorer with ads permissions
+# IMPORTANT: For Ads API access, you need to:
+# 1. Use Facebook Graph API Explorer (https://developers.facebook.com/tools/explorer/)
+# 2. Select your app
+# 3. Request these permissions: ads_read, ads_management, business_management
+# 4. Generate token and exchange for long-lived token using this script's method
 
 # CSRF protection: Store state token
 STATE_TOKEN = None
