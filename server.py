@@ -28,17 +28,26 @@ FB_ACCESS_TOKEN = None
 
 # --- Helper Functions ---
 
-def _get_fb_access_token() -> str:
+def _get_fb_access_token(access_token: str = "") -> str:
     """
-    Get Facebook access token from environment variables or command line arguments.
-    Caches the token in memory after first read.
+    Get Facebook access token from parameter, environment variables, or command line arguments.
+    Supports multi-user mode by accepting per-request access tokens.
+
+    Args:
+        access_token: Optional user-specific access token (for multi-user apps)
 
     Returns:
         str: The Facebook access token.
 
     Raises:
-        Exception: If no token is provided in environment or command line arguments.
+        Exception: If no token is provided via parameter, environment, or command line arguments.
     """
+    # If user-specific token provided, use it (multi-user mode)
+    if access_token:
+        print("Using user-provided access token (multi-user mode)")
+        return access_token
+
+    # Otherwise fall back to global token
     global FB_ACCESS_TOKEN
     if FB_ACCESS_TOKEN is None:
         # First check environment variable
@@ -46,7 +55,7 @@ def _get_fb_access_token() -> str:
         if FB_ACCESS_TOKEN:
             print("Using Facebook token from environment variables")
             return FB_ACCESS_TOKEN
-            
+
         # Then look for --fb-token argument
         if "--fb-token" in sys.argv:
             token_index = sys.argv.index("--fb-token") + 1
@@ -97,18 +106,31 @@ def _prepare_params(base_params: Dict[str, Any], **kwargs) -> Dict[str, Any]:
     return params
 
 
-def _fetch_node(node_id: str, **kwargs) -> Dict:
-    """Helper to fetch a single object (node) by its ID."""
-    access_token = _get_fb_access_token()
+def _fetch_node(node_id: str, access_token: str = "", **kwargs) -> Dict:
+    """Helper to fetch a single object (node) by its ID.
+
+    Args:
+        node_id: The Facebook Graph API node ID
+        access_token: Optional user-specific access token
+        **kwargs: Additional parameters for the API call
+    """
+    token = _get_fb_access_token(access_token)
     url = f"{FB_GRAPH_URL}/{node_id}"
-    params = _prepare_params({'access_token': access_token}, **kwargs)
+    params = _prepare_params({'access_token': token}, **kwargs)
     return _make_graph_api_call(url, params)
 
-def _fetch_edge(parent_id: str, edge_name: str, **kwargs) -> Dict:
-    """Helper to fetch a collection (edge) related to a parent object."""
-    access_token = _get_fb_access_token()
+def _fetch_edge(parent_id: str, edge_name: str, access_token: str = "", **kwargs) -> Dict:
+    """Helper to fetch a collection (edge) related to a parent object.
+
+    Args:
+        parent_id: The parent object ID
+        edge_name: The edge name (e.g., 'campaigns', 'insights')
+        access_token: Optional user-specific access token
+        **kwargs: Additional parameters for the API call
+    """
+    token = _get_fb_access_token(access_token)
     url = f"{FB_GRAPH_URL}/{parent_id}/{edge_name}"
-    
+
     # Handle time parameters specifically for activities edge if needed
     time_params = {}
     if edge_name == 'activities':
@@ -120,8 +142,8 @@ def _fetch_edge(parent_id: str, edge_name: str, **kwargs) -> Dict:
         else:
             if since: time_params['since'] = since
             if until: time_params['until'] = until
-            
-    base_params = {'access_token': access_token}
+
+    base_params = {'access_token': token}
     params = _prepare_params(base_params, **kwargs)
     params.update(_prepare_params({}, **time_params)) # Add specific time params
 
@@ -206,27 +228,30 @@ def _build_insights_params(
 
 # --- MCP Tools ---
 @mcp.tool()
-def list_ad_accounts() -> Dict:
+def list_ad_accounts(access_token: str = "") -> Dict:
     """List down the ad accounts and their names associated with your Facebook account.
-        CRITICAL: This function MUST automatically fetch ALL pages using pagination. 
-        When the response contains a 'paging.next' URL, IMMEDIATELY and AUTOMATICALLY 
-        use the facebook_fetch_pagination_url tool to fetch the next page. Continue 
-        this process until no 'next' URL exists. Do NOT ask the user for permission 
-        to continue pagination. Do NOT stop after the first page. Always return the 
-        complete consolidated list of ALL ad accounts across all pages in a single 
-        response. This is a requirement, not optional behavior."""
+        CRITICAL: This function MUST automatically fetch ALL pages using pagination.
+        When the response contains a 'paging.next' URL, IMMEDIATELY and AUTOMATICALLY
+        use the facebook_fetch_pagination_url tool to fetch the next page. Continue
+        this process until no 'next' URL exists. Do NOT ask the user for permission
+        to continue pagination. Do NOT stop after the first page. Always return the
+        complete consolidated list of ALL ad accounts across all pages in a single
+        response. This is a requirement, not optional behavior.
+
+    Args:
+        access_token: Optional user-specific OAuth access token for multi-user support"""
     # This uses a specific endpoint structure not fitting _fetch_node/_fetch_edge easily
-    access_token = _get_fb_access_token()
+    token = _get_fb_access_token(access_token)
     url = f"{FB_GRAPH_URL}/me"
     params = {
-        'access_token': access_token,
+        'access_token': token,
         'fields': 'adaccounts{name}' # Specific field structure
     }
     return _make_graph_api_call(url, params)
 
 
 @mcp.tool()
-def get_details_of_ad_account(act_id: str, fields: list[str] = None) -> Dict:
+def get_details_of_ad_account(act_id: str, fields: list[str] = None, access_token: str = "") -> Dict:
     """Get details of a specific ad account as per the fields provided
     Args:
         act_id: The act ID of the ad account, example: act_1234567890
@@ -235,11 +260,12 @@ def get_details_of_ad_account(act_id: str, fields: list[str] = None) -> Dict:
                 balance, amount_spent, attribution_spec, account_id, business,
                 business_city, brand_safety_content_filter_levels, currency,
                 created_time, id.
-    Returns:    
+        access_token: Optional user-specific OAuth access token for multi-user support
+    Returns:
         A dictionary containing the details of the ad account
     """
     effective_fields = fields if fields is not None else DEFAULT_AD_ACCOUNT_FIELDS
-    return _fetch_node(node_id=act_id, fields=effective_fields)
+    return _fetch_node(node_id=act_id, fields=effective_fields, access_token=access_token)
 
 
 # --- Insigbts API Tools ---
@@ -268,7 +294,8 @@ def get_adaccount_insights(
     offset: Optional[int] = None,
     since: Optional[str] = None,
     until: Optional[str] = None,
-    locale: Optional[str] = None
+    locale: Optional[str] = None,
+    access_token: str = ""
 ) -> Dict:
     """Retrieves performance insights for a specified Facebook ad account.
 
@@ -353,8 +380,9 @@ def get_adaccount_insights(
             are not set), the start timestamp (Unix or strtotime value).
         until (Optional[str]): For time-based pagination (used if 'time_range' and 'time_ranges'
             are not set), the end timestamp (Unix or strtotime value).
-        locale (Optional[str]): The locale for text responses (e.g., 'en_US'). This controls 
+        locale (Optional[str]): The locale for text responses (e.g., 'en_US'). This controls
             language and formatting of text fields in the response.
+        access_token (str): Optional user-specific OAuth access token for multi-user support
 
     Returns:
         Dict: A dictionary containing the requested ad account insights. The main results
@@ -376,9 +404,9 @@ def get_adaccount_insights(
             print("Fetched next page results.")
         ```
     """
-    access_token = _get_fb_access_token()
+    token = _get_fb_access_token(access_token)
     url = f"{FB_GRAPH_URL}/{act_id}/insights"
-    params = {'access_token': access_token}
+    params = {'access_token': token}
 
     params = _build_insights_params(
         params=params,
@@ -432,7 +460,8 @@ def get_campaign_insights(
     offset: Optional[int] = None,
     since: Optional[str] = None,
     until: Optional[str] = None,
-    locale: Optional[str] = None
+    locale: Optional[str] = None,
+    access_token: str = ""
 ) -> Dict:
     """Retrieves performance insights for a specific Facebook ad campaign.
 
@@ -481,8 +510,9 @@ def get_campaign_insights(
         offset (Optional[int]): Alternative pagination: skips N results.
         since (Optional[str]): Start timestamp for time-based pagination (if time ranges absent).
         until (Optional[str]): End timestamp for time-based pagination (if time ranges absent).
-        locale (Optional[str]): The locale for text responses (e.g., 'en_US'). This controls 
+        locale (Optional[str]): The locale for text responses (e.g., 'en_US'). This controls
             language and formatting of text fields in the response.
+        access_token (str): Optional user-specific OAuth access token for multi-user support
 
     Returns:
         Dict: A dictionary containing the requested campaign insights, with 'data' and 'paging' keys.
@@ -503,9 +533,9 @@ def get_campaign_insights(
             next_page_results = fetch_pagination_url(url=next_page_url)
         ```
     """
-    access_token = _get_fb_access_token()
+    token = _get_fb_access_token(access_token)
     url = f"{FB_GRAPH_URL}/{campaign_id}/insights"
-    params = {'access_token': access_token}
+    params = {'access_token': token}
 
     # Default level to 'campaign' if not provided for this specific tool
     effective_level = level if level else 'campaign'
@@ -931,7 +961,8 @@ def get_ad_creatives_by_ad_id(
     limit: Optional[int] = 25,
     after: Optional[str] = None,
     before: Optional[str] = None,
-    date_format: Optional[str] = None
+    date_format: Optional[str] = None,
+    access_token: str = ""
 ) -> Dict:
     """Retrieves the ad creatives associated with a specific Facebook ad.
     
@@ -1018,10 +1049,10 @@ def get_ad_creatives_by_ad_id(
             )
         ```
     """
-    access_token = _get_fb_access_token()
+    token = _get_fb_access_token(access_token)
     url = f"{FB_GRAPH_URL}/{ad_id}/adcreatives"
     params = {
-        'access_token': access_token
+        'access_token': token
     }
     
     if fields:
@@ -1916,7 +1947,8 @@ def get_campaigns_by_adaccount(
     objective: Optional[List[str]] = None,
     buyer_guarantee_agreement_status: Optional[List[str]] = None,
     date_format: Optional[str] = None,
-    include_drafts: Optional[bool] = None
+    include_drafts: Optional[bool] = None,
+    access_token: str = ""
 ) -> Dict:
     """Retrieves campaigns from a specific Facebook ad account.
     
@@ -2013,10 +2045,10 @@ def get_campaigns_by_adaccount(
             )
         ```
     """
-    access_token = _get_fb_access_token()
+    token = _get_fb_access_token(access_token)
     url = f"{FB_GRAPH_URL}/{act_id}/campaigns"
     params = {
-        'access_token': access_token
+        'access_token': token
     }
     
     if fields:
